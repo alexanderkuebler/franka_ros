@@ -4,6 +4,9 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
+#include <iostream>
+#include <string>
+using namespace std;
 
 #include <actionlib/server/simple_action_server.h>
 #include <controller_manager/controller_manager.h>
@@ -15,22 +18,14 @@
 #include <ros/ros.h>
 #include <std_srvs/Trigger.h>
 
-#include <hardware_interface/hardware_interface.h>
-
 using franka_hw::ServiceContainer;
 using namespace std::chrono_literals;
 
 int main(int argc, char** argv) {
-
-  // %%%%%%%%%%%%%%%%%%%%%%%%%%% Setup %%%%%%%%%%%%%%%%%%%%%%%%%%%
   ros::init(argc, argv, "franka_control_node");
 
   ros::NodeHandle public_node_handle;
   ros::NodeHandle node_handle("~");
-
-  // Start background threads for message handling
-  ros::AsyncSpinner spinner(4);
-  spinner.start();
 
   franka_hw::FrankaHW franka_control;
   if (!franka_control.init(public_node_handle, node_handle)) {
@@ -103,8 +98,6 @@ int main(int argc, char** argv) {
     response.message = "";
     return true;
   };
-  ROS_INFO("LOL0");
-
 
   connect();
 
@@ -116,103 +109,21 @@ int main(int argc, char** argv) {
           "disconnect", disconnect_handler);
 
   controller_manager::ControllerManager control_manager(&franka_control, public_node_handle);
-
-  ROS_INFO("LOL1");
-
-
-
-
-
-
-
-
-
-
-
-  franka_hw::FrankaPoseCartesianInterface* cartesian_pose_interface_;
-  std::unique_ptr<franka_hw::FrankaCartesianPoseHandle> cartesian_pose_handle_;
-  ros::Duration elapsed_time_;
-  std::array<double, 16> initial_pose_{};
-
-
-  hardware_interface::RobotHW* robot_hardware;
-  // ros::NodeHandle& node_handle;
-
-
-  cartesian_pose_interface_ = robot_hardware->get<franka_hw::FrankaPoseCartesianInterface>();
-  if (cartesian_pose_interface_ == nullptr) {
-    ROS_ERROR(
-        "CartesianPoseExampleController: Could not get Cartesian Pose "
-        "interface from hardware");
-    // return false;
-  }
-
-  std::string arm_id;
-  if (!node_handle.getParam("arm_id", arm_id)) {
-    ROS_ERROR("CartesianPoseExampleController: Could not get parameter arm_id");
-    // return false;
-  }
-
-  try {
-    cartesian_pose_handle_ = std::make_unique<franka_hw::FrankaCartesianPoseHandle>(
-        cartesian_pose_interface_->getHandle(arm_id + "_robot"));
-  } catch (const hardware_interface::HardwareInterfaceException& e) {
-    ROS_ERROR_STREAM(
-        "CartesianPoseExampleController: Exception getting Cartesian handle: " << e.what());
-    // return false;
-  }
-
-  auto state_interface = robot_hardware->get<franka_hw::FrankaStateInterface>();
-  if (state_interface == nullptr) {
-    ROS_ERROR("CartesianPoseExampleController: Could not get state interface from hardware");
-    return false;
-  }
-
-  try {
-    auto state_handle = state_interface->getHandle(arm_id + "_robot");
-
-    std::array<double, 7> q_start{{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
-    for (size_t i = 0; i < q_start.size(); i++) {
-      if (std::abs(state_handle.getRobotState().q_d[i] - q_start[i]) > 1) {
-        ROS_ERROR_STREAM(
-            "CartesianPoseExampleController: Robot is not in the expected starting position for "
-            "running this example. Run `roslaunch franka_example_controllers move_to_start.launch "
-            "robot_ip:=<robot-ip> load_gripper:=<has-attached-gripper>` first.");
-        // return false;
-      }
-    }
-  } catch (const hardware_interface::HardwareInterfaceException& e) {
-    ROS_ERROR_STREAM(
-        "CartesianPoseExampleController: Exception getting state handle: " << e.what());
-    // return false;
-  }
-
-  initial_pose_ = cartesian_pose_handle_->getRobotState().O_T_EE_d;
-  elapsed_time_ = ros::Duration(0.0);
-
-
-  ROS_INFO("LOL1");
-
-
-
-
-
-
+  bool suc_serv = false;
+  string controller_1 = "cartesian_pose_example_controller";
+  string controller_2 = "cartesian_velocity_example_controller";
+  // control_manager.loadController(controller_2);
+  // control_manager.switchController({controller_lol},{}, 2);
+  // ROS_INFO(suc_serv);
 
   // Start background threads for message handling
-  // ros::AsyncSpinner spinner(4);
-  // spinner.start();
+  ros::AsyncSpinner spinner(4);
+  spinner.start();
 
-  ROS_INFO("LOL3");
+  ros::Time last_switch = ros::Time::now();
 
-
-
-  // %%%%%%%%%%%%%%%%%%%%%%%%%%% Loop %%%%%%%%%%%%%%%%%%%%%%%%%%%
-  
   while (ros::ok()) {
     ros::Time last_time = ros::Time::now();
-    ROS_INFO("LOL4");
-
 
     // Wait until controller has been activated or error has been recovered
     while (!franka_control.controllerActive() || has_error) {
@@ -226,8 +137,6 @@ int main(int argc, char** argv) {
           last_time = now;
         } catch (const std::logic_error& e) {
         }
-        ROS_INFO("LOL5");
-
       } else {
         std::this_thread::sleep_for(1ms);
       }
@@ -238,47 +147,18 @@ int main(int argc, char** argv) {
     }
 
     if (franka_control.connected()) {
-      ROS_INFO("LOL6");
-
       try {
         // Run control loop. Will exit if the controller is switched.
         franka_control.control([&](const ros::Time& now, const ros::Duration& period) {
           if (period.toSec() == 0.0) {
-
-
             // Reset controllers before starting a motion
             control_manager.update(now, period, true);
             franka_control.checkJointLimits();
             franka_control.reset();
           } else {
-
-            elapsed_time_ += period;
-            double radius = 0.3;
-            double angle = M_PI / 4 * (1 - std::cos(M_PI / 5.0 * elapsed_time_.toSec()));
-            double delta_x = radius * std::sin(angle);
-            double delta_z = radius * (std::cos(angle) - 1);
-            std::array<double, 16> new_pose = initial_pose_;
-            new_pose[12] -= delta_x;
-            new_pose[14] -= delta_z;
-            cartesian_pose_handle_->setCommand(new_pose);
-
-            
-            
-
-            // command_pose.publish(desired_pose_);
-
-
             control_manager.update(now, period);
             franka_control.checkJointLimits();
             franka_control.enforceLimits(period);
-
-
-
-
-
-
-
-
           }
           return ros::ok();
         });
@@ -288,7 +168,7 @@ int main(int argc, char** argv) {
       }
     }
     ROS_INFO_THROTTLE(1, "franka_control, main loop");
-    // ROS_INFO(last_time);
+    ROS_INFO(last_time);
   }
 
   return 0;

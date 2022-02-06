@@ -29,6 +29,7 @@ class CartesianPoseExampleController
   std::unique_ptr<franka_hw::FrankaCartesianPoseHandle> cartesian_pose_handle_;
   ros::Duration elapsed_time_;
   std::array<double, 16> initial_pose_{};
+  // std::string subs_topic = "/desired_topic"
 };
 
 }  // namespace franka_example_controllers

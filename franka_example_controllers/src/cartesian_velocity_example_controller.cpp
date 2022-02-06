@@ -51,7 +51,7 @@ bool CartesianVelocityExampleController::init(hardware_interface::RobotHW* robot
 
     std::array<double, 7> q_start = {{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
     for (size_t i = 0; i < q_start.size(); i++) {
-      if (std::abs(state_handle.getRobotState().q_d[i] - q_start[i]) > 0.1) {
+      if (std::abs(state_handle.getRobotState().q_d[i] - q_start[i]) > 1) {
         ROS_ERROR_STREAM(
             "CartesianVelocityExampleController: Robot is not in the expected starting position "
             "for running this example. Run `roslaunch franka_example_controllers "

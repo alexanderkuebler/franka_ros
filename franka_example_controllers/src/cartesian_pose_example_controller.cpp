@@ -51,7 +51,7 @@ bool CartesianPoseExampleController::init(hardware_interface::RobotHW* robot_har
 
     std::array<double, 7> q_start{{0, -M_PI_4, 0, -3 * M_PI_4, 0, M_PI_2, M_PI_4}};
     for (size_t i = 0; i < q_start.size(); i++) {
-      if (std::abs(state_handle.getRobotState().q_d[i] - q_start[i]) > 0.1) {
+      if (std::abs(state_handle.getRobotState().q_d[i] - q_start[i]) > 1) {
         ROS_ERROR_STREAM(
             "CartesianPoseExampleController: Robot is not in the expected starting position for "
             "running this example. Run `roslaunch franka_example_controllers move_to_start.launch "
@@ -68,6 +68,15 @@ bool CartesianPoseExampleController::init(hardware_interface::RobotHW* robot_har
   return true;
 }
 
+// int CartesianPoseExampleController::topicCallback(const geometry_msg::Pose& message)
+// {
+//   int r[3] = 0;
+//   r[0] = message.point.x;
+//   r[1] = message.point.y;
+//   r[2] = message.point.z;
+//   return r;
+// }
+
 void CartesianPoseExampleController::starting(const ros::Time& /* time */) {
   initial_pose_ = cartesian_pose_handle_->getRobotState().O_T_EE_d;
   elapsed_time_ = ros::Duration(0.0);
@@ -76,7 +85,6 @@ void CartesianPoseExampleController::starting(const ros::Time& /* time */) {
 void CartesianPoseExampleController::update(const ros::Time& /* time */,
                                             const ros::Duration& period) {
   elapsed_time_ += period;
-
   double radius = 0.3;
   double angle = M_PI / 4 * (1 - std::cos(M_PI / 5.0 * elapsed_time_.toSec()));
   double delta_x = radius * std::sin(angle);
@@ -85,6 +93,19 @@ void CartesianPoseExampleController::update(const ros::Time& /* time */,
   new_pose[12] -= delta_x;
   new_pose[14] -= delta_z;
   cartesian_pose_handle_->setCommand(new_pose);
+  double x = 0.5;
+  double y = 0.0;
+  double z = 0.5;
+
+  double L = sqrt(pow(x,2) + pow(y,2) + pow(z,2));
+  double del_x = x / L;
+  double del_y = y / L;
+  double del_z = z / L;
+  pose[12] += del_x * period.toSec();
+  pose[13] += del_y * period.toSec();
+  pose[14] += del_z * period.toSec();
+  cartesian_pose_handle_->setCommand(pose);
+
 }
 
 }  // namespace franka_example_controllers
